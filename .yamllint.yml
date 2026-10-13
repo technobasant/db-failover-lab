@@ -1,0 +1,5 @@
+# Relaxed rules, with room for the explanatory comments in the compose files.
+extends: relaxed
+rules:
+  line-length:
+    max: 130

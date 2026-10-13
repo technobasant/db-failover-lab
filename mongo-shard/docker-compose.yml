@@ -1,0 +1,31 @@
+# MongoDB 8.0 — minimal sharded cluster: 1 config replica set (CSRS),
+# 2 single-member shards, 1 mongos router. Demonstrates horizontal sharding.
+name: mongo-shard
+
+services:
+  configsvr:
+    image: mongo:8.0
+    command: ["mongod", "--configsvr", "--replSet", "cfg", "--bind_ip_all", "--port", "27017"]
+    volumes: ["cfg:/data/db"]
+
+  shard1:
+    image: mongo:8.0
+    command: ["mongod", "--shardsvr", "--replSet", "shard1", "--bind_ip_all", "--port", "27017"]
+    volumes: ["s1:/data/db"]
+
+  shard2:
+    image: mongo:8.0
+    command: ["mongod", "--shardsvr", "--replSet", "shard2", "--bind_ip_all", "--port", "27017"]
+    volumes: ["s2:/data/db"]
+
+  mongos:
+    image: mongo:8.0
+    command: ["mongos", "--configdb", "cfg/configsvr:27017", "--bind_ip_all", "--port", "27017"]
+    ports: ["27030:27017"]
+    restart: on-failure
+    depends_on: [configsvr, shard1, shard2]
+
+volumes:
+  cfg:
+  s1:
+  s2:

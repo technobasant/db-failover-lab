@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Every stack must at least parse and resolve: a compose file that does
+      # not render is a lab nobody can rerun.
+      - name: docker compose config
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r f; do
+            if docker compose -f "$f" config -q; then
+              echo "ok   $f"
+            else
+              echo "FAIL $f"; status=1
+            fi
+          done < <(find . -name 'docker-compose.yml' -not -path './.git/*' | sort)
+          exit "$status"
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(find . -name '*.sh' -not -path './.git/*')
+          if [ "${#scripts[@]}" -gt 0 ]; then shellcheck "${scripts[@]}"; fi
+
+      - name: yamllint
+        run: |
+          pipx run yamllint .

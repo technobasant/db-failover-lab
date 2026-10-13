@@ -1,0 +1,62 @@
+# PostgreSQL 18 — primary + streaming hot-standby replica (HA) with a replication slot.
+#
+#   docker compose -f pg-replication/docker-compose.yml up -d
+#   # replica clones the primary via pg_basebackup (-R writes standby.signal + primary_conninfo)
+#   # then streams WAL. Promote it with pg_ctl promote to simulate failover.
+#
+# Demonstrates: streaming replication, hot-standby read-only queries, replication lag,
+# replication slots (prevent WAL removal), and replica promotion (failover).
+name: pg-replication
+
+services:
+  pgprimary:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: poc
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - hot_standby=on
+    ports: ["5434:5432"]
+    # PG18 image wants the mount at /var/lib/postgresql (data lands in an 18/docker
+    # subdir) — NOT /var/lib/postgresql/data, which the image now rejects.
+    volumes:
+      - pgp:/var/lib/postgresql
+      - ./primary-init.sh:/docker-entrypoint-initdb.d/primary-init.sh:ro
+
+  pgreplica:
+    image: postgres:18
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+    depends_on: [pgprimary]
+    ports: ["5435:5432"]
+    # If the data dir is empty, clone the primary with pg_basebackup, then start as
+    # a hot standby. Runs the clone as the postgres user so file ownership is correct.
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        if [ ! -s "$$PGDATA/PG_VERSION" ]; then
+          until pg_isready -h pgprimary -p 5432 -U admin -d poc; do
+            echo "waiting for primary..."; sleep 2;
+          done
+          export PGPASSWORD=replpass
+          gosu postgres pg_basebackup -h pgprimary -p 5432 -U replicator \
+            -D "$$PGDATA" -Fp -Xs -R -P -S replica1_slot
+        fi
+        exec docker-entrypoint.sh postgres
+    volumes:
+      - pgr:/var/lib/postgresql
+
+volumes:
+  pgp:
+  pgr:

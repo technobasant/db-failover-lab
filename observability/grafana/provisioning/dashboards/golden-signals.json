@@ -1,0 +1,87 @@
+{
+  "uid": "dba-golden",
+  "title": "DBA Golden Signals",
+  "tags": ["dba-poc"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "PostgreSQL — active connections",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "sum(pg_stat_database_numbackends)", "legendFormat": "connections", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "PostgreSQL — commits & rollbacks / sec",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(pg_stat_database_xact_commit[1m]))", "legendFormat": "commits/s", "refId": "A" },
+        { "expr": "sum(rate(pg_stat_database_xact_rollback[1m]))", "legendFormat": "rollbacks/s", "refId": "B" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "PostgreSQL — cache hit ratio",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "sum(rate(pg_stat_database_blks_hit[5m])) / (sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])))", "legendFormat": "hit ratio", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Redis — commands / sec",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        { "expr": "rate(redis_commands_processed_total[1m])", "legendFormat": "cmds/s", "refId": "A" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Redis — keyspace hit ratio",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1 } },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        { "expr": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))", "legendFormat": "hit ratio", "refId": "A" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Redis — connected clients & memory",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        { "expr": "redis_connected_clients", "legendFormat": "clients", "refId": "A" },
+        { "expr": "redis_memory_used_bytes", "legendFormat": "mem bytes", "refId": "B" }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0
+      }
+    ]
+  }
+}

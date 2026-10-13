@@ -1,0 +1,13 @@
+# Local overrides and secrets
+.env
+.env.*
+
+# Anything a stack might write next to its compose file
+backup/
+data/
+*.log
+
+# OS / editor junk
+.DS_Store
+.idea/
+.vscode/

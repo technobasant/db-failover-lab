@@ -1,0 +1,73 @@
+# MariaDB 11.8 + Galera 4 — 3-node virtually-synchronous multi-master cluster (HA).
+#
+# Bring-up order matters (donor must be ready before joiners request SST):
+#   docker compose -f galera-ha/docker-compose.yml up -d galera1   # bootstraps a NEW cluster
+#   # wait until healthy, then:
+#   docker compose -f galera-ha/docker-compose.yml up -d galera2 galera3
+#
+# Each joiner pulls a full snapshot from the donor via mariabackup SST, then stays
+# in sync via certification-based replication. wsrep_cluster_size should reach 3.
+name: galera-ha
+
+x-galera-common: &galera-common
+  image: mariadb:11.8
+  environment:
+    MARIADB_ROOT_PASSWORD: admin123
+    MARIADB_DATABASE: poc
+  # Common Galera settings on every node. Node name/address auto-derive from hostname.
+  command: &galera-cmd >
+    --wsrep-on=ON
+    --wsrep-provider=/usr/lib/galera/libgalera_smm.so
+    --wsrep-cluster-name=poc-galera
+    --wsrep-cluster-address=gcomm://galera1,galera2,galera3
+    --wsrep-sst-method=mariabackup
+    --wsrep-sst-auth=mariabackup:sstpw123
+    --binlog-format=ROW
+    --default-storage-engine=InnoDB
+    --innodb-autoinc-lock-mode=2
+
+services:
+  galera1:
+    <<: *galera-common
+    ports: ["3310:3306"]
+    # --wsrep-new-cluster bootstraps an empty cluster (only on the first node, once).
+    command: >
+      --wsrep-new-cluster
+      --wsrep-on=ON
+      --wsrep-provider=/usr/lib/galera/libgalera_smm.so
+      --wsrep-cluster-name=poc-galera
+      --wsrep-cluster-address=gcomm://galera1,galera2,galera3
+      --wsrep-sst-method=mariabackup
+      --wsrep-sst-auth=mariabackup:sstpw123
+      --binlog-format=ROW
+      --default-storage-engine=InnoDB
+      --innodb-autoinc-lock-mode=2
+    volumes:
+      - g1:/var/lib/mysql
+      - ./galera-init.sql:/docker-entrypoint-initdb.d/galera-init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  galera2:
+    <<: *galera-common
+    ports: ["3311:3306"]
+    volumes: ["g2:/var/lib/mysql"]
+    depends_on:
+      galera1:
+        condition: service_healthy
+
+  galera3:
+    <<: *galera-common
+    ports: ["3312:3306"]
+    volumes: ["g3:/var/lib/mysql"]
+    depends_on:
+      galera1:
+        condition: service_healthy
+
+volumes:
+  g1:
+  g2:
+  g3:

@@ -1,0 +1,53 @@
+# Observability lab — DB exporters -> Prometheus -> Grafana (auto-provisioned).
+#
+#   docker compose -f observability/docker-compose.yml up -d
+#   # Prometheus targets:  http://localhost:9091/targets   (postgres + redis should be UP)
+#   # Grafana dashboard:   http://localhost:3002  (admin/admin123) -> "DBA Golden Signals"
+#
+# Demonstrates end-to-end metrics: exporters expose /metrics, Prometheus scrapes them,
+# Grafana renders golden signals (connections, commits, cache hit ratio, ops/sec).
+name: observability
+
+services:
+  obs-postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: poc
+    volumes: ["obs_pg:/var/lib/postgresql"]
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    environment:
+      DATA_SOURCE_NAME: "postgresql://admin:admin123@obs-postgres:5432/poc?sslmode=disable"
+    depends_on: [obs-postgres]
+
+  obs-redis:
+    image: redis:8
+    command: ["redis-server", "--appendonly", "yes"]
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      REDIS_ADDR: "redis://obs-redis:6379"
+    depends_on: [obs-redis]
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports: ["9091:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    ports: ["3002:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus]
+
+volumes:
+  obs_pg:

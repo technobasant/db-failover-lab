@@ -1,0 +1,25 @@
+# MongoDB 8.0 — 3-node replica set (HA). No auth for a fast, reliable live PoC;
+# production keyfile + RBAC steps are documented in RESULTS.md.
+name: mongo-ha
+
+services:
+  mongo1:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports: ["27021:27017"]
+    volumes: ["m1:/data/db"]
+  mongo2:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports: ["27022:27017"]
+    volumes: ["m2:/data/db"]
+  mongo3:
+    image: mongo:8.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
+    ports: ["27023:27017"]
+    volumes: ["m3:/data/db"]
+
+volumes:
+  m1:
+  m2:
+  m3:

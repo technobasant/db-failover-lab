@@ -1,0 +1,128 @@
+# Sandbox: single-node engines for quick experiments (2026 versions).
+# Not part of the measured HA results — those are the per-engine stacks at the repo root.
+#
+# Profiles let you bring up only what you need (these are heavy services):
+#   docker compose --profile cache up -d        # redis + valkey
+#   docker compose --profile sql up -d          # postgres + mysql + mariadb (galera-capable)
+#   docker compose --profile nosql up -d        # mongodb + cassandra
+#   docker compose --profile scylla up -d       # scylladb (alt to cassandra; run separately)
+#   docker compose --profile search up -d        # solr
+#   docker compose --profile observ up -d        # prometheus + grafana
+#
+# Ports are offset so the sandbox can run beside one of the HA stacks.
+# Tear down everything (and volumes):  docker compose --profile cache --profile sql \
+#   --profile nosql --profile scylla --profile search --profile observ down -v
+
+name: failover-lab-sandbox
+
+services:
+  # ----------------------------- NoSQL -----------------------------
+  mongodb:
+    image: mongo:8.0
+    profiles: ["nosql"]
+    ports: ["27018:27017"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    command: ["--bind_ip_all"]
+    volumes: ["mongo_data:/data/db"]
+
+  cassandra:
+    image: cassandra:5.0
+    profiles: ["nosql"]
+    ports: ["9042:9042"]
+    environment:
+      CASSANDRA_CLUSTER_NAME: poc-cluster
+      MAX_HEAP_SIZE: 1G
+      HEAP_NEWSIZE: 256M
+    volumes: ["cassandra_data:/var/lib/cassandra"]
+
+  scylladb:
+    image: scylladb/scylla:2026.1
+    profiles: ["scylla"]
+    ports: ["9043:9042"]
+    command: ["--smp", "1", "--memory", "1G", "--overprovisioned", "1"]
+    volumes: ["scylla_data:/var/lib/scylla"]
+
+  # ----------------------------- Cache -----------------------------
+  redis:
+    image: redis:8
+    profiles: ["cache"]
+    ports: ["6380:6379"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lfu"]
+    volumes: ["redis_data:/data"]
+
+  valkey:
+    image: valkey/valkey:8
+    profiles: ["cache"]
+    ports: ["6381:6379"]
+    command: ["valkey-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lfu"]
+    volumes: ["valkey_data:/data"]
+
+  # ----------------------------- Search ----------------------------
+  solr:
+    image: solr:9
+    profiles: ["search"]
+    ports: ["8983:8983"]
+    command: ["solr-precreate", "products"]
+    volumes: ["solr_data:/var/solr"]
+
+  # ------------------------------ SQL ------------------------------
+  postgres:
+    image: postgres:18
+    profiles: ["sql"]
+    ports: ["5433:5432"]
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: poc
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+
+  mysql:
+    image: mysql:8.4
+    profiles: ["sql"]
+    ports: ["3308:3306"]
+    environment:
+      MYSQL_ROOT_PASSWORD: admin123
+      MYSQL_DATABASE: poc
+    volumes: ["mysql_data:/var/lib/mysql"]
+
+  mariadb:
+    image: mariadb:11.8
+    profiles: ["sql"]
+    ports: ["3307:3306"]
+    environment:
+      MARIADB_ROOT_PASSWORD: admin123
+      MARIADB_DATABASE: poc
+    # For a real Galera PoC, run 3 nodes with --wsrep-new-cluster on the first.
+    # Single node here is enough to inspect wsrep_* variables and config.
+    command: ["--wsrep-provider=/usr/lib/galera/libgalera_smm.so", "--wsrep-on=OFF"]
+    volumes: ["mariadb_data:/var/lib/mysql"]
+
+  # -------------------------- Observability ------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["observ"]
+    ports: ["9090:9090"]
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["observ"]
+    ports: ["3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+    volumes: ["grafana_data:/var/lib/grafana"]
+
+volumes:
+  mongo_data:
+  cassandra_data:
+  scylla_data:
+  redis_data:
+  valkey_data:
+  solr_data:
+  pg_data:
+  mysql_data:
+  mariadb_data:
+  grafana_data:

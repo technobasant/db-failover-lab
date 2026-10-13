@@ -1,0 +1,32 @@
+# Redis 8 Sentinel HA — 1 primary + 2 replicas + 3 sentinels (quorum 2).
+# Sentinel = automatic failover for a SINGLE primary (no sharding). Contrast with
+# redis-cluster/ which adds sharding across 16384 slots.
+#
+#   docker compose -f redis-sentinel/docker-compose.yml up -d
+#   docker exec redis-sentinel-sentinel1-1 redis-cli -p 26379 sentinel master mymaster
+#   docker stop redis-sentinel-rprimary-1   # watch a replica get promoted within ~5s
+name: redis-sentinel
+
+services:
+  rprimary:
+    image: redis:8
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["7201:6379"]
+
+  rreplica1:
+    image: redis:8
+    command: ["redis-server", "--replicaof", "rprimary", "6379", "--appendonly", "yes"]
+    depends_on: [rprimary]
+
+  rreplica2:
+    image: redis:8
+    command: ["redis-server", "--replicaof", "rprimary", "6379", "--appendonly", "yes"]
+    depends_on: [rprimary]
+
+  sentinel1: &sentinel
+    image: redis:8
+    command: ["sh", "-c", "cp /etc/redis/sentinel.conf /tmp/s.conf && redis-sentinel /tmp/s.conf"]
+    volumes: ["./sentinel.conf:/etc/redis/sentinel.conf:ro"]
+    depends_on: [rprimary, rreplica1, rreplica2]
+  sentinel2: *sentinel
+  sentinel3: *sentinel
