@@ -1,6 +1,6 @@
 # db-failover-lab
 
-Six database engines, eight failover scenarios, one laptop — and what each one actually preserved.
+Six database engines, eight failover scenarios on real multi-node clusters, one container per node — and what each one actually preserved.
 
 Every high-availability page ends with the same sentence: the cluster tolerates the loss of a node. It rarely says which node, how long the gap is, whether the write you just acknowledged survived, or what the survivors do while an election runs. I wanted current, measured evidence of that across the engines I work with, so I wrote one test plan and ran it against real multi-node clusters: bring a cluster up, seed known state, kill something, and record what came back.
 
