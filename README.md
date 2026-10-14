@@ -20,7 +20,7 @@ Write-ups: [the lab, scenario by scenario](https://basantbhattarai.com.np/writin
 | MongoDB 8.0 | 3-node replica set | Stopped the primary | New primary elected; `w:"majority"` write succeeded on it | 1,000 / 1,000 docs replicated |
 | MongoDB 8.0 | Config server + 2 shards + `mongos` | 100,000 docs on a hashed `userId` key | Targeted query hit 1 shard; a non-key filter scatter-gathered to both | **49,607 / 50,393** shard split |
 | ScyllaDB 2026.1 | 3 nodes, RF=3, 256 vnodes each | One node stopped, read at `QUORUM` | Read served from the surviving replicas | 3 / 3 rows; 3 endpoints held the key |
-| ScyllaDB 2026.1 | Same | `TRUNCATE`, then snapshot restore | Restored after `DROP` + recreate + load from `upload/` + `nodetool refresh` | 3 / 3 rows restored |
+| ScyllaDB 2026.1 | Same | `TRUNCATE`, then snapshot restore | Snapshot copied into the live table's `upload/` on one node + `nodetool refresh --load-and-stream`; no `DROP` needed | 3 / 3 rows restored |
 | SolrCloud 9 | ZooKeeper + 2 nodes, 2 shards × 2 replicas | Stopped one node | Cluster went ORANGE and kept answering; back to GREEN once the node restarted | `numFound` **6** throughout |
 | Prometheus + Grafana | Exporters → Prometheus → Grafana | — | Postgres, Redis and Prometheus targets up; dashboard auto-provisioned | Redis keyspace hits / misses 500 / 500 |
 | Network partition | — | Asymmetric partition | **Not tested** — one Docker host cannot produce a split network | — |
@@ -35,7 +35,7 @@ The last row is the limit of the rig, not a result. Every failover here is proce
 The passes were the boring part. These three were version-specific traps no documentation page warned about:
 
 - **ScyllaDB's third node would not start**, with `system does not satisfy minimum AIO requirements`. Seastar reserves async I/O contexts per reactor and the Docker VM's `fs.aio-max-nr` fit two nodes. Raise it VM-wide (it does not survive a Docker Desktop restart). [Write-up](https://basantbhattarai.com.np/writing/scylladb-nodetool-refresh-upload-truncate-marker/)
-- **A valid ScyllaDB snapshot restored zero rows, three times, with no error.** `nodetool refresh` only reads the table's `upload/` subdirectory, `TRUNCATE` writes a marker that hides older SSTables, and recreating a table gives it a new UUID directory. [Write-up](https://basantbhattarai.com.np/writing/scylladb-nodetool-refresh-upload-truncate-marker/)
+- **A valid ScyllaDB snapshot restored zero rows, with no error.** `nodetool refresh` only reads the live table's `upload/` subdirectory; files beside the live SSTables, or in a dropped table's stale UUID directory, load nothing and exit 0. *Corrected 2026-10-14:* an earlier version also blamed a `TRUNCATE` marker. A re-test on 2026.1 showed the truncated table restores normally, so that claim is withdrawn. [Write-up](https://basantbhattarai.com.np/writing/scylladb-nodetool-refresh-upload-truncate-marker/)
 - **Every compose file copied from a PostgreSQL 12–17 guide breaks on 18.** The image wants the volume at `/var/lib/postgresql` with `PGDATA` in an `18/docker` subdirectory, not at `/var/lib/postgresql/data`. [Write-up](https://basantbhattarai.com.np/writing/postgresql-18-docker-volume-path-change/)
 
 ## Quick start

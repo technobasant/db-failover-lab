@@ -116,15 +116,20 @@ CONSISTENCY QUORUM; SELECT ... -> returned 3 rows   # survives 1 node down (need
 ### 2c. Snapshot backup → loss → restore
 ```
 nodetool snapshot -t poc_bkp poc          # on all 3 nodes (hardlinked SSTables)
-TRUNCATE poc.sensor_by_day                  # loss -> 0 rows
-# restore: stage snapshot SSTables -> DROP+recreate -> copy into <table-dir>/upload/ -> refresh
-nodetool refresh poc sensor_by_day          # per node
-CONSISTENCY QUORUM; SELECT count(*) -> 3    # restored
+TRUNCATE poc.sensor_by_day                  # loss -> 0 rows (TRUNCATE also auto-snapshots)
+# restore: copy one node's snapshot SSTables into the LIVE table's <table-dir>/upload/
+nodetool refresh poc sensor_by_day --load-and-stream   # one node; streams to every replica
+CONSISTENCY QUORUM; SELECT count(*) -> 3    # restored, no DROP needed
 ```
 > **Gotchas hit & fixed:** (1) `nodetool refresh` loads only from the table's **`upload/`**
-> subdir; (2) **TRUNCATE writes a truncation marker** that hides older SSTables, so restore needs
-> DROP+recreate (not truncate); (3) recreating a table makes a **new UUID directory** — load into
-> the live dir (match `system_schema.tables.id`), not the stale one.
+> subdir; (2) a recreated table has a **new UUID directory** — load into the live dir (match
+> `system_schema.tables.id`), not the stale one, which exits 0 and loads nothing; (3) files must be
+> owned by `scylla`, or refresh exits 4.
+>
+> **Correction (2026-10-14):** an earlier version listed a third gotcha, that TRUNCATE writes a
+> marker hiding older SSTables so restore needs DROP+recreate. A re-test on 2026.1 (1 node and
+> 3 nodes, tablets and vnodes) refuted it: the snapshot loads into the truncated table normally,
+> and ScyllaDB's own restore procedure truncates first.
 
 ### 2d. Monitoring
 ```
@@ -361,7 +366,7 @@ for d in mongo-ha mongo-shard scylla-ha solr-ha galera-ha redis-cluster redis-se
   `w:majority` writes continued; then sharded a 100k collection on a hashed key — even 50/50 split,
   single-shard targeting when the shard key is present, scatter-gather otherwise.
 - *ScyllaDB:* 3-node RF=3; QUORUM reads survived a node down. Snapshot + `nodetool refresh`
-  restore, including the truncation-marker and `upload/` gotchas. Hit the AIO limit and fixed it
+  restore, including the `upload/` and stale-directory gotchas. Hit the AIO limit and fixed it
   with a VM-wide sysctl.
 - *SolrCloud:* 2 shards × 2 replicas, GREEN; dropped a node → ORANGE but fully queryable →
   auto-recovered to GREEN. Collection BACKUP/RESTORE via a shared path with `solr.allowPaths`.
