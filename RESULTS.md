@@ -241,8 +241,12 @@ docker kill galera2 galera3 -> size=1, status=non-Primary    # UNGRACEFUL: lost 
 
 ### 4e. Recovery
 - Canonical: bootstrap the most-advanced survivor (`SET GLOBAL wsrep_provider_options='pc.bootstrap=YES'`).
-- **Gotcha hit:** in this MariaDB 11.8 build `wsrep_provider_options` is **read-only at runtime**, so
-  recovery is done by restarting that node as a new cluster (`galera_new_cluster` / `--wsrep-new-cluster`).
+- Recovery here was done by restarting that node as a new cluster (`galera_new_cluster` /
+  `--wsrep-new-cluster`).
+- *Withdrawn (2026-10-14):* this section used to say `wsrep_provider_options` is read-only at
+  runtime in this build. MariaDB closed that report as not a bug (MDEV-32800): it only happens
+  with `plugin-wsrep-provider=ON`, which this compose does not set, and the error from the run
+  was not captured. Treat the `SET GLOBAL` path as untested here rather than broken.
 
 ### Production notes
 - SST (full snapshot via mariabackup) for new joiners; **IST** (incremental) for short absences.
