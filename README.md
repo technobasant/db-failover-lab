@@ -14,7 +14,7 @@ Write-ups: [the lab, scenario by scenario](https://basantbhattarai.com.np/writin
 |---|---|---|---|---|
 | PostgreSQL 18 | Primary + hot standby on a replication slot | `pg_promote()` on the standby | Standby left recovery, timeline 1 → 2, writes accepted | Replay lag **383 µs**, write lag 104 µs ¹ |
 | Redis 8 Sentinel | 1 primary + 2 replicas + 3 sentinels, quorum 2 | Stopped the primary | Replica promoted; canary key intact; old primary rejoined as a replica | **~5 s** to a writable replica ² |
-| Redis 8 Cluster | 3 primaries + 3 replicas, 16,384 slots | `docker kill` on a primary | Its replica promoted; `cluster_state:ok`, all 16,384 slots covered; seeded keys intact | Config epoch **2 → 7** |
+| Redis 8 Cluster | 3 primaries + 3 replicas, 16,384 slots | `docker kill` on a primary | Its replica promoted; `cluster_state:ok`, all 16,384 slots covered; known keys intact | Config epoch **2 → 7** |
 | MariaDB 11.8 + Galera 4 | 3-node multi-master | 150 concurrent `UPDATE`s of one row from two masters | Certification failures on two nodes (3 and 5), 2 BF aborts — and the counter converged | **300 / 300 / 300** on all three nodes |
 | MariaDB 11.8 + Galera 4 | 3-node multi-master | Graceful stop of two nodes, then `docker kill` of two | Graceful: survivor stayed Primary. Ungraceful: survivor went non-Primary and rejected writes (`ERROR 1047`) | Quorum loss only on ungraceful exit |
 | MongoDB 8.0 | 3-node replica set | Stopped the primary | New primary elected; `w:"majority"` write succeeded on it | 1,000 / 1,000 docs replicated |
